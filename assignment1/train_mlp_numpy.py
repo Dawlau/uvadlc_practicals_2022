@@ -29,6 +29,7 @@ from copy import deepcopy
 from mlp_numpy import MLP
 from modules import CrossEntropyModule
 import cifar10_utils
+import matplotlib.pyplot as plt
 
 import torch
 
@@ -44,14 +45,13 @@ def confusion_matrix(predictions, targets):
     Returns:
       confusion_matrix: confusion matrix per class, 2D float array of size [n_classes, n_classes]
     """
+    n_classes = predictions.shape[1]
+    conf_mat = np.zeros(shape=(n_classes, n_classes))
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    for sample, label in zip(predictions, targets):
+        prediction = np.argmax(sample)
+        conf_mat[label][prediction] += 1
 
-    #######################
-    # END OF YOUR CODE    #
-    #######################
     return conf_mat
 
 
@@ -66,13 +66,14 @@ def confusion_matrix_to_metrics(confusion_matrix, beta=1.):
         recall: 1D float array of size [n_classes], the recall for each clas
         f1_beta: 1D float array of size [n_classes], the f1_beta scores for each class
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    metrics = {}
+    metrics["accuracy"] = np.sum(np.diag(confusion_matrix)) / np.sum(confusion_matrix)
+    tp = np.diag(confusion_matrix)
+    fp = np.sum(confusion_matrix, axis=0) - tp
+    fn = np.sum(confusion_matrix, axis=1) - tp
+    metrics["precision"] = tp / (tp + fp)
+    metrics["recall"] = tp / (tp + fn)
+    metrics["f1_beta"] = (1 + beta ** 2) * metrics["precision"] * metrics["recall"] / (beta ** 2 * metrics["precision"] + metrics["recall"])
     return metrics
 
 
@@ -85,23 +86,19 @@ def evaluate_model(model, data_loader, num_classes=10):
       data_loader: The data loader of the dataset to evaluate.
     Returns:
         metrics: A dictionary calculated using the conversion of the confusion matrix to metrics.
-
-    TODO:
-    Implement evaluation of the MLP model on a given dataset.
-
-    Hint: make sure to return the average accuracy of the whole dataset,
-          independent of batch sizes (not all batches might be the same size).
     """
+    image_size = 32 * 32 * 3
+    conf_matrix = np.zeros(shape=(num_classes, num_classes))
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    for images, labels in data_loader:
+        images = np.reshape(images, newshape=(images.shape[0], image_size))
+        predictions = model.forward(images)
+        batch_conf_matrix = confusion_matrix(predictions, labels)
+        conf_matrix += batch_conf_matrix
 
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    metrics = confusion_matrix_to_metrics(conf_matrix)
+
     return metrics
-
 
 
 def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
@@ -119,21 +116,10 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
       model: An instance of 'MLP', the trained model that performed best on the validation set.
       val_accuracies: A list of scalar floats, containing the accuracies of the model on the
                       validation set per epoch (element 0 - performance after epoch 1)
-      test_accuracy: scalar float, average accuracy on the test dataset of the model that 
+      test_accuracy: scalar float, average accuracy on the test dataset of the model that
                      performed best on the validation. Between 0.0 and 1.0
-      logging_info: An arbitrary object containing logging information. This is for you to 
+      logging_info: An arbitrary object containing logging information. This is for you to
                     decide what to put in here.
-
-    TODO:
-    - Implement the training of the MLP model. 
-    - Evaluate your model on the whole validation set each epoch.
-    - After finishing training, evaluate your model that performed best on the validation set, 
-      on the whole test dataset.
-    - Integrate _all_ input arguments of this function in your training. You are allowed to add
-      additional input argument if you assign it a default value that represents the plain training
-      (e.g. '..., new_param=False')
-
-    Hint: you can save your best model by deepcopy-ing it.
     """
 
     # Set the random seeds for reproducibility
@@ -145,34 +131,107 @@ def train(hidden_dims, lr, batch_size, epochs, seed, data_dir):
     cifar10_loader = cifar10_utils.get_dataloader(cifar10, batch_size=batch_size,
                                                   return_numpy=True)
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    train_loader = cifar10_loader["train"]
+    validation_loader = cifar10_loader["validation"]
+    test_loader = cifar10_loader["test"]
 
-    # TODO: Initialize model and loss module
-    model = ...
-    loss_module = ...
-    # TODO: Training loop including validation
-    val_accuracies = ...
-    # TODO: Test best model
-    test_accuracy = ...
-    # TODO: Add any information you might want to save for plotting
-    logging_info = ...
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    data_size = 32 * 32 * 3
+    num_classes = 10
 
-    return model, val_accuracies, test_accuracy, logging_dict
+    model = MLP(data_size, hidden_dims, num_classes)
+    loss_module = CrossEntropyModule()
+
+    train_accuracies = np.zeros(epochs)
+    val_accuracies = np.zeros(epochs)
+
+    train_losses = np.zeros(epochs)
+    val_losses = np.zeros(epochs)
+
+    best_accuracy = 0
+    best_model = None
+
+    for epoch in range(epochs):
+        print(f"Epoch {epoch + 1}")
+        train_loss = 0
+
+        for images, labels in tqdm(train_loader):
+            images = np.reshape(images, newshape=(images.shape[0], data_size))
+            predictions = model.forward(images)
+            loss = loss_module.forward(predictions, labels)
+
+            dout = loss_module.backward(predictions, labels)
+            model.backward(dout)
+
+            for layer in model.layers:
+                if hasattr(layer, "params"):
+                    layer.params["weight"] -= lr * layer.grads["weight"]
+                    layer.params["bias"] -= lr * layer.grads["bias"]
+
+            train_loss += loss
+
+        train_losses[epoch] = train_loss / len(train_loader)
+        train_metrics = evaluate_model(model, train_loader)
+        train_accuracies[epoch] = train_metrics["accuracy"]
+
+        val_loss = 0
+        for images, labels in tqdm(validation_loader):
+            images = np.reshape(images, newshape=(images.shape[0], data_size))
+            predictions = model.forward(images)
+            loss = loss_module.forward(predictions, labels)
+            val_loss += loss
+
+        val_losses[epoch] = val_loss / len(validation_loader)
+        val_metrics = evaluate_model(model, validation_loader)
+        val_accuracies[epoch] = val_metrics["accuracy"]
+
+        if best_accuracy < val_metrics["accuracy"]:
+            best_accuracy = val_metrics["accuracy"]
+            best_model = deepcopy(model)
+
+        model.clear_cache()
+
+    test_metrics = evaluate_model(best_model, test_loader)
+    test_accuracy = test_metrics["accuracy"]
+
+    logging_info = {
+        "train_losses": train_losses,
+        "validation_losses": val_losses,
+        "train_accuracies": train_accuracies
+    }
+
+    return model, val_accuracies, test_accuracy, logging_info
+
+
+def plot(val_accuracies, logging_info):
+    train_losses = logging_info["train_losses"]
+    val_losses = logging_info["validation_losses"]
+    train_accuracies = logging_info["train_accuracies"]
+
+    plt.plot(train_losses, label="Training Loss")
+    plt.plot(val_losses, label="Validation Loss")
+    plt.legend()
+    plt.title("Epoch Loss")
+    plt.xlabel("Epochs")
+    plt.ylabel("Loss")
+    plt.show()
+
+    plt.plot(train_accuracies, label="Training Accuracy")
+    plt.plot(val_accuracies, label="Validation Accuracy")
+    plt.legend()
+    plt.title("Model Accuracies")
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.show()
 
 
 if __name__ == '__main__':
     # Command line arguments
     parser = argparse.ArgumentParser()
-    
+
     # Model hyperparameters
     parser.add_argument('--hidden_dims', default=[128], type=int, nargs='+',
                         help='Hidden dimensionalities to use inside the network. To specify multiple, use " " to separate them. Example: "256 128"')
-    
+
     # Optimizer hyperparameters
     parser.add_argument('--lr', default=0.1, type=float,
                         help='Learning rate to use')
@@ -190,6 +249,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     kwargs = vars(args)
 
-    train(**kwargs)
-    # Feel free to add any additional functions, such as plotting of the loss curve here
-    
+    model, val_accuracies, test_accuracy, logging_info = train(**kwargs)
+    print(test_accuracy)
+    plot(val_accuracies, logging_info)

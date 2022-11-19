@@ -22,6 +22,7 @@ from __future__ import division
 from __future__ import print_function
 
 import torch.nn as nn
+import torch
 from collections import OrderedDict
 
 
@@ -47,22 +48,25 @@ class MLP(nn.Module):
                      output dimensions of the MLP
           use_batch_norm: If True, add a Batch-Normalization layer in between
                           each Linear and ELU layer.
-
-        TODO:
-        Implement module setup of the network.
-        The linear layer have to initialized according to the Kaiming initialization.
-        Add the Batch-Normalization _only_ is use_batch_norm is True.
-        
-        Hint: No softmax layer is needed here. Look at the CrossEntropyLoss module for loss calculation.
         """
+        super().__init__()
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        pass
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        self.n_inputs = n_inputs
+        self.n_hidden = n_hidden
+        self.n_classes = n_classes
+        self.layers = nn.ModuleList()
+
+        for i, n_out in enumerate(n_hidden):
+            if i == 0:
+                layer = nn.Linear(self.n_inputs, n_out)
+            else:
+                layer = nn.Linear(n_hidden[i - 1], n_out)
+            self.layers.append(layer)
+            if use_batch_norm:
+                self.layers.append(nn.BatchNorm1d(n_out))
+            self.layers.append(nn.ELU())
+
+        self.layers.append(nn.Linear(n_hidden[-1], n_classes))
 
     def forward(self, x):
         """
@@ -73,18 +77,11 @@ class MLP(nn.Module):
           x: input to the network
         Returns:
           out: outputs of the network
-
-        TODO:
-        Implement forward pass of the network.
         """
+        out = torch.clone(x)
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        for layer in self.layers:
+            out = layer(out)
 
         return out
 
@@ -94,4 +91,4 @@ class MLP(nn.Module):
         Returns the device on which the model is. Can be useful in some situations.
         """
         return next(self.parameters()).device
-    
+

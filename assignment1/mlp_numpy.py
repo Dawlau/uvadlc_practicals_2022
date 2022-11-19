@@ -44,18 +44,21 @@ class MLP(object):
           n_classes: number of classes of the classification problem.
                      This number is required in order to specify the
                      output dimensions of the MLP
-
-        TODO:
-        Implement initialization of the network.
         """
+        self.n_inputs = n_inputs
+        self.n_classes = n_classes
+        self.layers = []
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        pass
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        for i, n_out in enumerate(n_hidden):
+            if i == 0:
+                layer = LinearModule(self.n_inputs, n_out, True)
+            else:
+                layer = LinearModule(n_hidden[i - 1], n_out)
+            self.layers.append(layer)
+            self.layers.append(ELUModule())
+
+        self.layers.append(LinearModule(n_hidden[-1], n_classes))
+        self.layers.append(SoftMaxModule())
 
     def forward(self, x):
         """
@@ -66,18 +69,10 @@ class MLP(object):
           x: input to the network
         Returns:
           out: outputs of the network
-
-        TODO:
-        Implement forward pass of the network.
         """
-
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        out = x
+        for layer in self.layers:
+            out = layer.forward(out)
 
         return out
 
@@ -87,32 +82,15 @@ class MLP(object):
 
         Args:
           dout: gradients of the loss
-
-        TODO:
-        Implement backward pass of the network.
         """
-
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        pass
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        for layer in self.layers[ : : -1]:
+            dout = layer.backward(dout)
+        return dout
 
     def clear_cache(self):
         """
         Remove any saved tensors for the backward pass from any module.
         Used to clean-up model from any remaining input data when we want to save it.
-
-        TODO:
-        Iterate over modules and call the 'clear_cache' function.
         """
-        
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        pass
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        for layer in self.layers:
+            layer.clear_cache()

@@ -30,33 +30,49 @@ import train_mlp_pytorch
 import torch
 import torch.nn as nn
 import torch.optim as optim
-# Hint: you might want to import some plotting libraries or similar
-# You are also allowed to use libraries here which are not in the provided environment.
+import matplotlib.pyplot as plt
 
 
 def train_models(results_filename):
     """
     Executes all requested hyperparameter configurations and stores all results in a file.
-    Note that we split the running of the model and the plotting, since you might want to 
+    Note that we split the running of the model and the plotting, since you might want to
     try out different plotting configurations without re-running your models every time.
 
     Args:
       results_filename - string which specifies the name of the file to which the results
                          should be saved.
-
-    TODO:
-    - Loop over all requested hyperparameter configurations and train the models accordingly.
-    - Store the results in a file. The form of the file is left up to you (numpy, json, pickle, etc.)
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    # TODO: Run all hyperparameter configurations as requested
-    results = None
-    # TODO: Save all results in a file with the name 'results_filename'. This can e.g. by a json file
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    hyperparameters = [
+        {
+            "n_hidden": [128],
+            "epochs": 20,
+            "lr": 0.1
+        },
+        {
+            "n_hidden": [256, 128],
+            "epochs": 20,
+            "lr": 0.1
+        },
+        {
+            "n_hidden": [512, 256, 128],
+            "epochs": 20,
+            "lr": 0.1
+        }
+    ]
+    results = []
+
+    for i, settings in enumerate(hyperparameters):
+        n_hiddens = settings["n_hidden"]
+        lr = settings["lr"]
+        epochs = settings["epochs"]
+
+        _, val_accuracies, _, logging_info = train_mlp_pytorch.train(n_hiddens, lr, False, 128, epochs, 42, "data/", save_model=False)
+
+        train_accuracies = logging_info["train_accuracies"]
+        results.append([val_accuracies, train_accuracies])
+
+    torch.save(results, results_filename)
 
 
 def plot_results(results_filename):
@@ -67,23 +83,27 @@ def plot_results(results_filename):
       results_filename - string which specifies the name of the file from which the results
                          are loaded.
 
-    TODO:
-    - Visualize the results in plots
-
-    Hint: you are allowed to add additional input arguments if needed.
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    pass
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    results = torch.load(results_filename)
+
+    fig, axis = plt.subplots(2, 3)
+
+    for i, (val_accuracies, train_accuracies) in enumerate(results):
+        axis[0][i].plot(train_accuracies, label="Train Accuracy")
+        axis[0][i].legend()
+        axis[0][i].set_xlabel("Epochs")
+        axis[0][i].set_ylabel("Accuracy")
+
+        axis[1][i].plot(val_accuracies, label="Valid Accuracy")
+        axis[1][i].legend()
+        axis[1][i].set_xlabel("Epochs")
+        axis[1][i].set_ylabel("Accuracy")
+
+    plt.show()
 
 
 if __name__ == '__main__':
-    # Feel free to change the code below as you need it.
-    FILENAME = 'results.txt' 
+    FILENAME = 'results.txt'
     if not os.path.isfile(FILENAME):
         train_models(FILENAME)
     plot_results(FILENAME)
