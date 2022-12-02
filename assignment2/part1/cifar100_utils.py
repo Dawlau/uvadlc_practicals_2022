@@ -21,6 +21,19 @@ from torch.utils.data import random_split
 from torchvision import transforms
 
 
+class AddGaussianNoise(torch.nn.Module):
+    def __init__(self, mean=0., std=0.1):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, img):
+        return img + torch.randn(img.shape) * self.std + self.mean
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
+
+
+
 def add_augmentation(augmentation_name, transform_list):
     """
     Adds an augmentation transform to the list.
@@ -29,19 +42,17 @@ def add_augmentation(augmentation_name, transform_list):
         transform_list: List of transforms to add the augmentation to.
 
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
+    if augmentation_name == "horizontal_flip":
+        transform = transforms.RandomHorizontalFlip()
+    elif augmentation_name == "vertical_flip":
+        transform = transforms.RandomVerticalFlip()
+    elif augmentation_name == "random_rotation":
+        transform = transforms.RandomRotation(degrees=(-90, 90))
+    else:
+        transform = None
 
-    # Create a new transformation based on the augmentation_name.
-    pass
-
-    # Add the new transformation to the list.
-    pass
-
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    if transform is not None:
+        transform_list.append(transform)
 
 
 def get_train_validation_set(data_dir, validation_size=5000, augmentation_name=None):
@@ -66,6 +77,7 @@ def get_train_validation_set(data_dir, validation_size=5000, augmentation_name=N
                        transforms.Normalize(mean, std)]
     if augmentation_name is not None:
         add_augmentation(augmentation_name, train_transform)
+
     train_transform = transforms.Compose(train_transform)
 
     val_transform = transforms.Compose([transforms.Resize((224, 224)),
@@ -91,7 +103,7 @@ def get_train_validation_set(data_dir, validation_size=5000, augmentation_name=N
     return train_dataset, val_dataset
 
 
-def get_test_set(data_dir):
+def get_test_set(data_dir, add_noise):
     """
     Returns the test dataset of CIFAR100.
 
@@ -104,9 +116,15 @@ def get_test_set(data_dir):
     mean = (0.5071, 0.4867, 0.4408)
     std = (0.2675, 0.2565, 0.2761)
 
-    test_transform = transforms.Compose([transforms.Resize((224, 224)),
+    if not add_noise:
+        test_transform = transforms.Compose([transforms.Resize((224, 224)),
                                         transforms.ToTensor(),
                                         transforms.Normalize(mean, std)])
+    else:
+        test_transform = transforms.Compose([transforms.Resize((224, 224)),
+                                        transforms.ToTensor(),
+                                        transforms.Normalize(mean, std),
+                                        AddGaussianNoise()])
 
     test_dataset = CIFAR100(root=data_dir, train=False, download=True, transform=test_transform)
     return test_dataset

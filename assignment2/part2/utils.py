@@ -34,6 +34,10 @@ def set_seed(seed):
     torch.backends.cudnn.benchmark = False
 
 
+class DummyArgs:
+    pass
+
+
 class AverageMeter(object):
     """Computes and stores the average and current value"""
 

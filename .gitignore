@@ -3,3 +3,7 @@ __pycache__
 model.pt
 results.txt
 confusion_matrix.png
+aggregate_results.sh
+model
+cifar100*
+prompt*

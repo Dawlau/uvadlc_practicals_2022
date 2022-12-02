@@ -1,6 +1,6 @@
 ################################################################################
 # MIT License
-#
+#﻿
 # Copyright (c) 2022 University of Amsterdam
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -60,17 +60,12 @@ class Learner:
             self.resume_checkpoint()
 
         print("Turning off gradients in both the image and the text encoder")
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        # TODO: Turn off gradients in both the image and the text encoder
-        # Note: You need to keep the visual prompt's parameters trainable
-        # Hint: Check for "prompt_learner" in the parameters' names
 
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        for name, parameter in self.vpt.named_parameters():
+            if not name.startswith("prompt_learner"):
+                parameter.requires_grad = False
+            else:
+                parameter.requires_grad = True
 
         # Double check
         enabled = set()
@@ -195,10 +190,10 @@ class Learner:
         self.vpt.train()
 
         num_batches_per_epoch = len(self.train_loader)
+        torch.autograd.set_detect_anomaly(True)
 
         end = time.time()
         for i, (images, target) in enumerate(tqdm(self.train_loader)):
-
             # Measure data loading time
             data_time.update(time.time() - end)
 
@@ -206,24 +201,16 @@ class Learner:
             step = num_batches_per_epoch * epoch + i
             self.scheduler(step)
 
-            #######################
-            # PUT YOUR CODE HERE  #
-            #######################
+            self.optimizer.zero_grad()
+            images = images.to(self.device)
+            target = target.to(self.device)
 
-            # TODO: Implement the training step for a single batch
+            output = self.vpt(images)
 
-            # Steps ( your usual training loop :) ):
-            # - Set the gradients to zero
-            # - Move the images/targets to the device
-            # - Perform a forward pass (using self.vpt)
-            # - Compute the loss (using self.criterion)
-            # - Perform a backward pass
-            # - Update the parameters
+            loss = self.criterion(output, target)
+            loss.backward()
 
-            raise NotImplementedError
-            #######################
-            # END OF YOUR CODE    #
-            #######################
+            self.optimizer.step()
 
             # Note: we clamp to 4.6052 = ln(100), as in the original paper.
             self.vpt.logit_scale.data = torch.clamp(
@@ -274,21 +261,11 @@ class Learner:
             end = time.time()
             for i, (images, target) in enumerate(tqdm(loader)):
 
-                #######################
-                # PUT YOUR CODE HERE  #
-                #######################
+                images = images.to(self.device)
+                target = target.to(self.device)
 
-                # TODO: Implement the evaluation step for a single batch
-
-                # Steps ( your usual evaluation loop :) ):
-                # - Move the images/targets to the device
-                # - Forward pass (using self.vpt)
-                # - Compute the loss (using self.criterion)
-
-                raise NotImplementedError
-                #######################
-                # END OF YOUR CODE    #
-                #######################
+                output = self.vpt(images)
+                loss = self.criterion(output, target)
 
                 # Measure accuracy and record loss
                 acc1 = accuracy(output, target, topk=(1,))
