@@ -21,7 +21,7 @@ import torch.nn as nn
 
 from utils import sample_reparameterize, KLD, elbo_to_bpd
 from cnn_encoder_decoder import CNNEncoder, CNNDecoder
-import train_torch
+# import train_torch
 import train_pl
 
 """
@@ -29,7 +29,7 @@ The following variables determine which training file to check.
 - Set TEST_LIGHTNING to True if you are using train_pl.py
 - Set TEST_TORCH to True if you are using train_torch.py
 """
-TEST_LIGHTNING = False
+TEST_LIGHTNING = True
 TEST_TORCH = False
 
 if not (TEST_LIGHTNING or TEST_TORCH):

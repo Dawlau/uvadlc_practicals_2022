@@ -28,6 +28,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from mnist import mnist
 from cnn_encoder_decoder import CNNEncoder, CNNDecoder
 from utils import *
+import matplotlib.pyplot as plt
 
 
 class VAE(pl.LightningModule):
@@ -43,8 +44,13 @@ class VAE(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
 
+        self.z_dim = z_dim
+
         self.encoder = CNNEncoder(z_dim=z_dim, num_filters=num_filters)
         self.decoder = CNNDecoder(z_dim=z_dim, num_filters=num_filters)
+
+        self.train_losses = []
+        self.val_losses = []
 
     def forward(self, imgs):
         """
@@ -58,25 +64,19 @@ class VAE(pl.LightningModule):
             bpd - The average bits per dimension metric of the batch.
                   This is also the loss we train on. Shape: single scalar
         """
+        mean, log_std = self.encoder(imgs)
+        z = sample_reparameterize(mean, torch.exp(log_std))
+        logits = self.decoder(z)
 
-        # Hints:
-        # - Implement the empty functions in utils.py before continuing
-        # - The forward run consists of encoding the images, sampling in
-        #   latent space, and decoding.
-        # - By default, torch.nn.functional.cross_entropy takes the mean accross
-        #   all axes. Do not forget to change the 'reduction' parameter to
-        #   make it consistent with the loss definition of the assignment.
+        L_rec = nn.functional.cross_entropy(logits, imgs.squeeze(), reduction='none')
+        L_rec = torch.sum(L_rec.reshape(-1, 28 * 28), axis=-1)
+        L_reg = KLD(mean, log_std)
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        L_rec = None
-        L_reg = None
-        bpd = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        L_rec = torch.mean(L_rec)
+        L_reg = torch.mean(L_reg)
+
+        bpd = elbo_to_bpd(L_rec + L_reg, imgs.shape)
+
         return L_rec, L_reg, bpd
 
     @torch.no_grad()
@@ -88,14 +88,14 @@ class VAE(pl.LightningModule):
         Outputs:
             x_samples - Sampled, 4-bit images. Shape: [B,C,H,W]
         """
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        x_samples = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        z = torch.randn((batch_size, self.z_dim)).to(self.decoder.device)
+        logits = self.decoder(z)
+        probabilities = nn.functional.softmax(logits, dim=1) # apply softmax across channels
+        probabilities = torch.permute(probabilities, (0, 2, 3, 1))
+        probabilities = torch.flatten(probabilities, end_dim=2)
+        x_samples = torch.multinomial(probabilities, 1).reshape(-1, 28, 28, 1)
+        x_samples = torch.permute(x_samples, (0, 3, 1, 2))
+
         return x_samples
 
     def configure_optimizers(self):
@@ -121,10 +121,31 @@ class VAE(pl.LightningModule):
         self.log("val_ELBO", L_rec + L_reg)
         self.log("val_bpd", bpd)
 
+        return bpd
+
+    def training_epoch_end(self, outputs):
+        self.train_losses.append(outputs[0]["loss"].item())
+
+    def validation_epoch_end(self, outputs):
+        self.val_losses.append(outputs[0].item())
+
     def test_step(self, batch, batch_idx):
         # Make use of the forward function, and add logging statements
         L_rec, L_reg, bpd = self.forward(batch[0])
         self.log("test_bpd", bpd)
+
+    def on_train_end(self) -> None:
+        plt.plot(range(len(self.train_losses)), self.train_losses)
+        plt.xlabel("Epochs")
+        plt.ylabel("Loss")
+        plt.title("Bpd Train Loss")
+        plt.show()
+
+        plt.plot(range(len(self.val_losses)), self.val_losses)
+        plt.xlabel("Epochs")
+        plt.ylabel("Loss")
+        plt.title("Bpd Validation Loss")
+        plt.show()
 
 
 class GenerateCallback(pl.Callback):

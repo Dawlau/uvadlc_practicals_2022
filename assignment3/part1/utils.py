@@ -17,6 +17,7 @@
 import torch
 from torchvision.utils import make_grid
 import numpy as np
+import torch.nn as nn
 
 
 def sample_reparameterize(mean, std):
@@ -32,14 +33,10 @@ def sample_reparameterize(mean, std):
     """
     assert not (std < 0).any().item(), "The reparameterization trick got a negative std as input. " + \
                                        "Are you sure your input is std and not log_std?"
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    z = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+
+    eps = torch.randn(mean.shape).to(mean.device)
+    z = mean + eps * std
+
     return z
 
 
@@ -54,15 +51,10 @@ def KLD(mean, log_std):
         KLD - Tensor with one less dimension than mean and log_std (summed over last dimension).
               The values represent the Kullback-Leibler divergence to unit Gaussians.
     """
+    KLD = torch.exp(2 * log_std) + torch.pow(mean, 2) - 1 - 2 * log_std
+    KLD /= 2
+    KLD = torch.sum(KLD, axis=-1)
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    KLD = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
     return KLD
 
 
@@ -75,14 +67,9 @@ def elbo_to_bpd(elbo, img_shape):
     Outputs:
         bpd - The negative log likelihood in bits per dimension for the given image.
     """
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    bpd = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    batch, channels, heigth, width = img_shape
+    dim_product = channels * heigth * width
+    bpd = elbo * np.log2(np.e) / dim_product
     return bpd
 
 
@@ -99,22 +86,27 @@ def visualize_manifold(decoder, grid_size=20):
     Outputs:
         img_grid - Grid of images representing the manifold.
     """
+    percentiles = torch.Tensor([(i - 0.5) / grid_size for i in range(1, grid_size + 1)])
+    normal = torch.distributions.Normal(0,1)
 
-    ## Hints:
-    # - You can use the icdf method of the torch normal distribution  to obtain z values at percentiles.
-    # - Use the range [0.5/grid_size, 1.5/grid_size, ..., (grid_size-0.5)/grid_size] for the percentiles.
-    # - torch.meshgrid might be helpful for creating the grid of values
-    # - You can use torchvision's function "make_grid" to combine the grid_size**2 images into a grid
-    # - Remember to apply a softmax after the decoder
+    p1, p2 = torch.meshgrid(percentiles, percentiles, indexing="xy")
 
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    img_grid = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    p1 = normal.icdf(p1)
+    p2 = normal.icdf(p2)
+
+    z = torch.stack([p1, p2], dim=-1)
+    z = torch.flatten(z, end_dim=-2)
+
+    logits = decoder(z)
+
+    probabilities = nn.functional.softmax(logits, dim=1)
+    probabilities = torch.permute(probabilities, (0, 2, 3, 1))
+    probabilities = torch.flatten(probabilities, end_dim=2)
+
+    x_samples = torch.multinomial(probabilities, 1).reshape(-1, 28, 28, 1)
+    x_samples = torch.permute(x_samples, (0, 3, 1, 2))
+
+    img_grid = make_grid(x_samples, nrow=grid_size).float()
 
     return img_grid
 

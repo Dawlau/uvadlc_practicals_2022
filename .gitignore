@@ -7,3 +7,4 @@ aggregate_results.sh
 model
 cifar100*
 prompt*
+.vscode

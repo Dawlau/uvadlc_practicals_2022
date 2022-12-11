@@ -97,27 +97,28 @@ def train_aae(epoch, model, train_loader,
     train_loss = 0
     for batch_idx, (x, _) in enumerate(train_loader):
         x = x.to(model.device)
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        # Encoder-Decoder update
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
+        optimizer_ae.zero_grad()
+        optimizer_disc.zero_grad()
+
+        recon_x, z_fake = model(x)
+        loss, logging_dict = model.get_loss_autoencoder(x, recon_x, z_fake, lambda_)
+        loss.backward()
+
+        # Encoder-Decoder update
+        optimizer_ae.step()
+
         # Discriminator update
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        optimizer_disc.step()
+
+        disc_loss = logging_dict["gen_loss"]
+        ae_loss = logging_dict["ae_loss"]
+
         train_loss += disc_loss.item() + ae_loss.item()
 
         if (epoch <= 1 or epoch % 5 == 0) and batch_idx == 0:
             save_reconstruction(model, epoch, logger_ae.summary_writer, x)
+            logger_ae.summary_writer.add_scalar("reconstruction_loss", logging_dict["recon_loss"], global_step=epoch)
     print('====> Epoch {} : Average loss: {:.4f}'.format(epoch, train_loss / len(train_loader)))
 
 
@@ -163,17 +164,8 @@ def main(args):
     model = model.to(device)
 
     # Create two separate optimizers for generator and discriminator
-    #######################
-    # PUT YOUR CODE HERE  #
-    #######################
-    # You can use the Adam optimizer for autoencoder and SGD for discriminator.
-    # It is recommended to reduce the momentum (beta1) to e.g. 0.5 for Adam optimizer.
-    optimizer_ae = None
-    optimizer_disc = None
-    raise NotImplementedError
-    #######################
-    # END OF YOUR CODE    #
-    #######################
+    optimizer_ae = optim.Adam([*model.encoder.parameters()] + [*model.decoder.parameters()], betas=(.5, .5), lr=args.ae_lr)
+    optimizer_disc = optim.SGD([*model.encoder.parameters()] + [*model.discriminator.parameters()], lr=args.d_lr)
 
     # TensorBoard logger
     # See utils.py for details on "TensorBoardLogger" class

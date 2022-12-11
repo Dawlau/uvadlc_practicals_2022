@@ -32,16 +32,23 @@ class CNNEncoder(nn.Module):
         """
         super().__init__()
 
-        # For an intial architecture, you can use the encoder of Tutorial 9.
-        # Feel free to experiment with the architecture yourself, but the one specified here is
-        # sufficient for the assignment.
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        c_hid = num_filters
+        self.net = nn.Sequential(
+            nn.Conv2d(num_input_channels, c_hid, kernel_size=3, padding=1, stride=2), # 32x32 => 16x16
+            nn.GELU(),
+            nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(c_hid, 2 * c_hid, kernel_size=3, padding=1, stride=2), # 16x16 => 8x8
+            nn.GELU(),
+            nn.Conv2d(2 * c_hid, 2 * c_hid, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.Conv2d(2 * c_hid, 2 * c_hid, kernel_size=3, padding=1, stride=2), # 8x8 => 4x4
+            nn.GELU(),
+            nn.Flatten(), # Image grid to single feature vector
+            nn.Linear(2 * 16 * c_hid, 2 * z_dim)
+        )
+
+        self.z_dim = z_dim
 
     def forward(self, x):
         """
@@ -53,15 +60,11 @@ class CNNEncoder(nn.Module):
                       of the latent distributions.
         """
         x = x.float() / 15 * 2.0 - 1.0  # Move images between -1 and 1
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        mean = None
-        log_std = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+
+        out = self.net(x)
+        mean = out[ : ,  : self.z_dim]
+        log_std = out[ : , self.z_dim : ]
+
         return mean, log_std
 
 
@@ -78,16 +81,25 @@ class CNNDecoder(nn.Module):
         """
         super().__init__()
 
-        # For an intial architecture, you can use the decoder of Tutorial 9.
-        # Feel free to experiment with the architecture yourself, but the one specified here is
-        # sufficient for the assignment.
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
+        c_hid = num_filters
+        self.linear = nn.Sequential(
+            nn.Linear(z_dim, 2 * 16 * c_hid),
+            nn.GELU()
+        )
+        self.net = nn.Sequential(
+            nn.ConvTranspose2d(2 * c_hid, 2 * c_hid, kernel_size=3, output_padding=0, padding=1, stride=2),
+            nn.GELU(),
+            nn.Conv2d(2 * c_hid, 2 * c_hid, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.ConvTranspose2d(2 * c_hid, c_hid, kernel_size=3, output_padding=1, padding=1, stride=2),
+            nn.GELU(),
+            nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
+            nn.GELU(),
+            nn.ConvTranspose2d(c_hid, num_input_channels, kernel_size=3, output_padding=1, padding=1, stride=2),
+        )
+
+        self.num_input_channels = num_input_channels
+        self.num_filters = num_filters
 
     def forward(self, z):
         """
@@ -98,15 +110,9 @@ class CNNDecoder(nn.Module):
                 This should be a logit output *without* a softmax applied on it.
                 Shape: [B,num_input_channels,28,28]
         """
+        x = self.linear(z).reshape(z.shape[0], 2 * self.num_filters, 4, 4)
+        x = self.net(x)
 
-        #######################
-        # PUT YOUR CODE HERE  #
-        #######################
-        x = None
-        raise NotImplementedError
-        #######################
-        # END OF YOUR CODE    #
-        #######################
         return x
 
     @property
